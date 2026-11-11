@@ -1,3 +1,4 @@
+//#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,8 +14,8 @@
 
 #define PRINTING 1 // Prints input and output vectors
 #define VFAURG   0 // Very Fast And Unsafe Random Generator™
-#define SAVING   0 // Saves Model to file
-#define LOADING  1 // Loads Model from file
+#define LOADING  0 // Loads Model from file
+#define GELU     0 // Enables GeLU activation function
 
 #if PRINTING
     #define PRT printf("\n\nInputs:\n");for(size_t i=0;i<model->layers[0];i++){printf("%.3f, ",inputs[i]);}printf("\n\nOutputs:\n");for(size_t i=model->b_c-model->layers[model->l_c-1];i<model->b_c;i++){printf("%.3f, ",model->buffer[i]);}
@@ -26,6 +27,12 @@
     #define PAR _Pragma("omp parallel for schedule(static)")
 #else
     #define PAR
+#endif
+
+#if GELU
+    #define AFUNC gelu
+#else
+    #define AFUNC relu
 #endif
 
 static double ms_between(const struct timespec *start, const struct timespec *end) {
@@ -64,6 +71,11 @@ static inline ptype gelu(ptype x) {
     return x / (1.0f + expf(-1.702f * x));
 }
 
+static inline ptype relu(ptype x) {
+    if (x > 0) return x;
+    else return 0;
+}
+
 void backProp(Model *model, const ptype *labels) {
     const ptype *restrict buffer = model->buffer;
     ptype gradient[D_MODEL];
@@ -71,7 +83,7 @@ void backProp(Model *model, const ptype *labels) {
     for (size_t i = 0; i < D_MODEL; i++) {
         ptype val = buffer[model->b_c - model->layers[model->l_c - 1] + i] - labels[i];
         gradient[i] = val;
-        printf("%.3f, ", val);
+        //printf("%.3f, ", val);
     }
 
 }
@@ -109,7 +121,7 @@ void MLP(Model *model, const ptype *inputs) {
             for (size_t k = 0; k < prev_layer; k++) {
                 value += buf_in[k] * par[k];
             }
-            buf_out[j] = gelu(value);
+            buf_out[j] = AFUNC(value);
         }
         n_ofs += prev_layer;
         w_ofs += prev_layer * layer;
@@ -270,7 +282,7 @@ int main(void) {
 
     printf("\nModel gen/load: %.3f ms", ms_between(&t0, &t1));
 
-    if (SAVING) {
+    if (!LOADING) {
         clock_gettime(CLOCK_MONOTONIC, &t0);
         if (saveModel("model.bin", model) != 0) return EXIT_FAILURE;
         clock_gettime(CLOCK_MONOTONIC, &t1);
@@ -288,7 +300,10 @@ int main(void) {
     printf("\n\nForward pass: %.3f ms", ms_between(&t0, &t1));
 
     PRT
-    printf("\n\nTarget:\n"); for (size_t i = 0; i < D_MODEL; i++) printf("%.3f, ", labels[i]);
+    if (PRINTING) {
+        printf("\n\nTarget:\n");
+        for (size_t i = 0; i < D_MODEL; i++) printf("%.3f, ", labels[i]);
+    }
     //printf("\n\nPress Enter: "); getchar();
 
     for (size_t i = 0; i < D_MODEL; i++) {

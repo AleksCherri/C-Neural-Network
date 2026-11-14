@@ -1,4 +1,5 @@
 model.bin
-a
+main
 *.exe
 *.kate-swp
+build/

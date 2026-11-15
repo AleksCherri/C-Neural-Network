@@ -13,7 +13,14 @@
 #define LOADING  0 // Loads Model from file
 
 #if PRINTING
-    #define PRT printf("\n\nInputs:\n");for(size_t i=0;i<model->layers[0];i++){printf("%.3f, ",inputs[i]);}printf("\n\nOutputs:\n");for(size_t i=model->b_c-model->layers[model->l_c-1];i<model->b_c;i++){printf("%.3f, ",model->buffer[i]);}
+    #define PRT printf("\n\nInputs:\n");\
+    for (size_t i = 0; i < model->layers[0]; i++) {\
+        printf("%.3f, ", inputs[i]);\
+    }\
+    printf("\n\nOutputs:\n");\
+    for (size_t i = model->b_c-model->layers[model->l_c - 1]; i < model->b_c; i++) {\
+        printf("%.3f, ", model->buffer[i]);\
+    }
 #else
     #define PRT
 #endif

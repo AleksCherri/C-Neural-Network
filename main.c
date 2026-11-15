@@ -8,8 +8,7 @@
 #define D_MODEL      4
 #define EXTENDING    4
 
-#define PRINTING 1 // Prints input and output vectors
-#define VFAURG   0 // Very Fast And Unsafe Random Generator™
+#define PRINTING 0 // Prints input and output vectors
 #define LOADING  0 // Loads Model from file
 
 #if PRINTING
@@ -25,12 +24,6 @@
     #define PRT
 #endif
 
-#if VFAURG && defined(_WIN32)
-    #define PAR _Pragma("omp parallel for schedule(static)")
-#else
-    #define PAR
-#endif
-
 static double ms_between(const struct timespec *start, const struct timespec *end) {
     return (end->tv_sec - start->tv_sec) * 1000.0 +
     (end->tv_nsec - start->tv_nsec) / 1e6;
@@ -43,10 +36,6 @@ int main(void) {
     ptype inputs[D_MODEL] = {1,2,3,4};
     ptype labels[D_MODEL] = {4,3,2,1};
     ptype outputs[D_MODEL];
-
-    // for (size_t i = 0; i < D_MODEL; i++) {
-    //     inputs[i] = (ptype)i;
-    // }
 
     clock_gettime(CLOCK_MONOTONIC, &t0);
     Model *model;
@@ -73,6 +62,11 @@ int main(void) {
     printf("\nLayer count:  %zu", model->l_c);
     printf("\nWeight count: %zu", model->w_c);
     printf("\nBias count:   %zu", model->b_c);
+
+    printf("\nParams:\n");
+    for (size_t i = 0; i < model->w_c; i++) {
+        printf("%.3f, ", model->params[i]);
+    }
 
     clock_gettime(CLOCK_MONOTONIC, &t0);
     MLP(model, inputs);

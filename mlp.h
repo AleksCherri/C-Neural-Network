@@ -16,6 +16,7 @@ typedef struct {
 float *randArray(size_t size, float seed);
 ptype gelu(ptype x);
 ptype relu(ptype x);
+ptype relu2(ptype x);
 void MLP(Model *model, const ptype *inputs);
 void backProp(Model *model, const ptype *labels);
 void freeModel(Model *model);

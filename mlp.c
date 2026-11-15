@@ -2,15 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 #include "mlp.h"
-
-#define GELU 0 // Enables GeLU activation function
-
-#if GELU
-    #define AFUNC gelu
-#else
-    #define AFUNC relu
-#endif
 
 float *randArray(size_t size, float seed) {
     float *arr = malloc(size * sizeof(float)); if (!arr) return NULL;
@@ -28,6 +21,11 @@ ptype gelu(ptype x) {
 
 ptype relu(ptype x) {
     if (x > 0) return x;
+    else return 0;
+}
+
+ptype relu2(ptype x) {
+    if (x > 0) return x * x;
     else return 0;
 }
 
@@ -64,7 +62,7 @@ void MLP(Model *model, const ptype *inputs) {
             for (size_t k = 0; k < prev_layer; k++) {
                 value += buf_in[k] * par[k];
             }
-            buf_out[j] = AFUNC(value);
+            buf_out[j] = relu(value);
         }
         n_ofs += prev_layer;
         w_ofs += prev_layer * layer;
@@ -107,8 +105,7 @@ Model *genModel(const ntype *layers, size_t layer_count) {
     Model *model = malloc(sizeof(Model)); if (!model) return NULL;
 
     model->layers = malloc(layer_count * sizeof(ntype));
-    //model->params = malloc((w_c + b_c) * sizeof(ptype));
-    model->params = randArray(b_c + w_c, 3.179749);
+    model->params = randArray(b_c + w_c, 3.14f);
     model->buffer = malloc(b_c * sizeof(ptype));
 
     if (!model->layers || !model->params || !model->buffer) {

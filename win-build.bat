@@ -6,5 +6,6 @@ cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 cd build
 main.exe
-pause
+
+echo %CMDCMDLINE% | find /i "/c" >nul && pause
 popd

@@ -84,12 +84,14 @@ void backProp(Model *model, const ptype *labels) {
 
 // Utility functions
 float *randArray(size_t size, float seed) {
-    float *arr = malloc(size * sizeof(float)); if (!arr) return NULL;
+    float *arr = malloc(size * sizeof(float));
+    if (!arr) {free(arr); return NULL;}
 
     #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < size; i++) {
-        arr[i] = sin(i / seed);
+        arr[i] = sin((float)i / seed);
     }
+
     return arr;
 }
 
@@ -102,30 +104,28 @@ void freeModel(Model *model) {
 }
 
 Model *genModel(const ntype *layers, size_t layer_count, ActType a_type) {
-    if (layer_count == 0) {return NULL;}
+    if (layer_count < 2) return NULL;
     size_t b_c = layers[layer_count - 1], w_c = 0;
     size_t layer, next_layer;
     for (size_t i = 0; i < layer_count - 1; i++) {
         layer = layers[i];
         next_layer = layers[i + 1];
-        if (layer == 0 || next_layer == 0) {return NULL;}
+        if (layer == 0 || next_layer == 0) return NULL;
         b_c += layer;
         w_c += layer * next_layer;
     }
 
-    Model *model = malloc(sizeof(Model)); if (!model) return NULL;
+    Model *model = malloc(sizeof(Model)); if (!model) goto fail;
 
     model->a_type = a_type;
     model->a_func = getAFunc(a_type);
+    if (!model->a_func) goto fail;
 
     model->layers = malloc(layer_count * sizeof(ntype));
     model->params = randArray(b_c + w_c, 3.14f);
     model->buffer = malloc(b_c * sizeof(ptype));
 
-    if (!model->layers || !model->params || !model->buffer) {
-        freeModel(model);
-        return NULL;
-    }
+    if (!model->layers || !model->params || !model->buffer) goto fail;
 
     memcpy(model->layers, layers, layer_count * sizeof(ntype));
 
@@ -134,22 +134,21 @@ Model *genModel(const ntype *layers, size_t layer_count, ActType a_type) {
     model->w_c = w_c;
 
     return model;
+
+    fail:
+    freeModel(model);
+    return NULL;
 }
 
 Model *loadModel(const char *filename) {
     Model *model = malloc(sizeof(Model)); if (!model) return NULL;
 
     FILE *file = fopen(filename, "rb");
-    if (!file) return NULL;
+    if (!file) free(model);
 
     uint32_t type;
 
-    if (
-        fread(&type, sizeof(type), 1, file) != 1
-    ) {
-        fclose(file);
-        return NULL;
-    }
+    if (fread(&type, sizeof(type), 1, file) != 1) goto fail;
 
     model->a_type = (ActType)type;
     model->a_func = getAFunc(model->a_type);
@@ -159,88 +158,67 @@ Model *loadModel(const char *filename) {
         fread(&model->l_c, size, 1, file) != 1 ||
         fread(&model->b_c, size, 1, file) != 1 ||
         fread(&model->w_c, size, 1, file) != 1
-    ) {
-        fclose(file);
-        return NULL;
-    }
+    ) goto fail;
 
-    if (model->l_c <= 0 || model->b_c <= 0 || model->w_c <= 0) {
-        fclose(file);
-        return NULL;
-    }
+    if (model->l_c <= 0 || model->b_c <= 0 || model->w_c <= 0) goto fail;
 
     model->layers = malloc(model->l_c * sizeof(ntype));
     model->params = malloc((model->w_c + model->b_c) * sizeof(ptype));
     model->buffer = malloc(model->b_c * sizeof(ptype));
 
-    if (!model->layers || !model->params || !model->buffer) {
-        freeModel(model);
-        fclose(file);
-        return NULL;
-    }
+    if (!model->layers || !model->params || !model->buffer) goto fail;
 
     if (
         fread(model->layers, sizeof(ntype), model->l_c, file)
         != (size_t)model->l_c
-    ) {
-        freeModel(model);
-        fclose(file);
-        return NULL;
-    }
+    ) goto fail;
 
     size = model->b_c + model->w_c;
     if (
         fread(model->params, sizeof(ptype), size, file)
         != size
-    ) {
-        freeModel(model);
-        fclose(file);
-        return NULL;
-    }
+    ) goto fail;
 
     fclose(file);
     return model;
+
+    fail:
+    fclose(file);
+    freeModel(model);
+    return NULL;
 }
 
 int saveModel(const char *filename, const Model *model) {
     FILE *file = fopen(filename, "wb");
-    if (!file) return -1;
+    if (!file) goto fail;
 
     uint32_t type = (uint32_t)model->a_type;
 
     if (
         fwrite(&type, sizeof(type), 1, file) != 1
-    ) {
-        fclose(file);
-        return -1;
-    }
+    ) goto fail;
     
     size_t size = sizeof(size_t);
     if (
         fwrite(&model->l_c, size, 1, file) != 1 ||
         fwrite(&model->b_c, size, 1, file) != 1 ||
         fwrite(&model->w_c, size, 1, file) != 1
-    ) {
-        fclose(file);
-        return -1;
-    }
+    ) goto fail;
 
     if (model->l_c > 0) {
         if (fwrite(model->layers, sizeof(ntype), model->l_c, file)
-        != (size_t)model->l_c) {
-            fclose(file);
-            return -1;
-        }
+        != (size_t)model->l_c) goto fail;
     }
 
     if (model->b_c > 0 && model->w_c > 0) {
         size_t p_c = model->b_c + model->w_c;
-        if (fwrite(model->params, sizeof(ptype), p_c, file) != p_c) {
-            fclose(file);
-            return -1;
-        }
+        if (fwrite(model->params, sizeof(ptype), p_c, file) != p_c) goto fail;
     }
 
     fclose(file);
     return 0;
+
+    fail:
+    fclose(file);
+    return -1;
 }

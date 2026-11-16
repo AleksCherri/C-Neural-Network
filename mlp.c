@@ -1,34 +1,34 @@
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <time.h>
 #include "mlp.h"
 
-float *randArray(size_t size, float seed) {
-    float *arr = malloc(size * sizeof(float)); if (!arr) return NULL;
-
-    #pragma omp parallel for schedule(static)
-    for (size_t i = 0; i < size; i++) {
-        arr[i] = sin(i / seed);
-    }
-    return arr;
-}
-
-ptype gelu(ptype x) {
+// Activation functions & related utilities
+static inline ptype gelu(ptype x) {
     return x / (1.0f + expf(-1.702f * x));
 }
 
-ptype relu(ptype x) {
-    if (x > 0) return x;
-    else return 0;
+static inline ptype relu(ptype x) {
+    return x > 0.0f ? x : 0.0f;
 }
 
-ptype relu2(ptype x) {
-    if (x > 0) return x * x;
-    else return 0;
+static inline ptype relu2(ptype x) {
+    return x > 0.0f ? x * x : 0.0f;
 }
 
+static ActFunc getAFunc(ActType type) {
+    switch (type) {
+        case GeLU:  return gelu;
+        case ReLU:  return relu;
+        case ReLU2: return relu2;
+        default:    return NULL;
+    }
+}
+
+// Main perceptron functions
 void MLP(Model *model, const ptype *inputs) {
     const ptype *restrict params = model->params;
     ptype *restrict buffer = model->buffer;
@@ -62,7 +62,7 @@ void MLP(Model *model, const ptype *inputs) {
             for (size_t k = 0; k < prev_layer; k++) {
                 value += buf_in[k] * par[k];
             }
-            buf_out[j] = relu(value);
+            buf_out[j] = model->a_func(value);
         }
         n_ofs += prev_layer;
         w_ofs += prev_layer * layer;
@@ -82,6 +82,17 @@ void backProp(Model *model, const ptype *labels) {
 
 }
 
+// Utility functions
+float *randArray(size_t size, float seed) {
+    float *arr = malloc(size * sizeof(float)); if (!arr) return NULL;
+
+    #pragma omp parallel for schedule(static)
+    for (size_t i = 0; i < size; i++) {
+        arr[i] = sin(i / seed);
+    }
+    return arr;
+}
+
 void freeModel(Model *model) {
     if (!model) return;
     free(model->layers);
@@ -90,7 +101,7 @@ void freeModel(Model *model) {
     free(model);
 }
 
-Model *genModel(const ntype *layers, size_t layer_count) {
+Model *genModel(const ntype *layers, size_t layer_count, ActType a_type) {
     if (layer_count == 0) {return NULL;}
     size_t b_c = layers[layer_count - 1], w_c = 0;
     size_t layer, next_layer;
@@ -103,6 +114,9 @@ Model *genModel(const ntype *layers, size_t layer_count) {
     }
 
     Model *model = malloc(sizeof(Model)); if (!model) return NULL;
+
+    model->a_type = a_type;
+    model->a_func = getAFunc(a_type);
 
     model->layers = malloc(layer_count * sizeof(ntype));
     model->params = randArray(b_c + w_c, 3.14f);
@@ -123,11 +137,22 @@ Model *genModel(const ntype *layers, size_t layer_count) {
 }
 
 Model *loadModel(const char *filename) {
-
     Model *model = malloc(sizeof(Model)); if (!model) return NULL;
 
     FILE *file = fopen(filename, "rb");
     if (!file) return NULL;
+
+    uint32_t type;
+
+    if (
+        fread(&type, sizeof(type), 1, file) != 1
+    ) {
+        fclose(file);
+        return NULL;
+    }
+
+    model->a_type = (ActType)type;
+    model->a_func = getAFunc(model->a_type);
 
     size_t size = sizeof(size_t);
     if (
@@ -181,6 +206,15 @@ int saveModel(const char *filename, const Model *model) {
     FILE *file = fopen(filename, "wb");
     if (!file) return -1;
 
+    uint32_t type = (uint32_t)model->a_type;
+
+    if (
+        fwrite(&type, sizeof(type), 1, file) != 1
+    ) {
+        fclose(file);
+        return -1;
+    }
+    
     size_t size = sizeof(size_t);
     if (
         fwrite(&model->l_c, size, 1, file) != 1 ||

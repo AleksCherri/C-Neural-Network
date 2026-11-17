@@ -12,4 +12,5 @@ Or run `win-build.bat`.
 ### Linux
 `rm -rf build` if `build` repository exists.  
 `cmake -S . -B build`  
-`cmake --build build`
+`cmake --build build`  
+Or run `lin-build.sh`.

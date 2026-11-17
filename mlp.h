@@ -1,3 +1,6 @@
+#include <stddef.h>
+#include <stdint.h>
+
 #ifndef MLP_H
 #define MLP_H
 

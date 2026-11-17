@@ -9,7 +9,7 @@
 #define EXTENDING    4
 
 #define PRINTING 0 // Prints input and output vectors
-#define LOADING  1 // Loads Model from file
+#define LOADING  0 // Loads Model from file
 
 #if PRINTING
     #define PRT printf("\n\nInputs:\n");\

@@ -84,12 +84,24 @@ void backProp(Model *model, const ptype *labels) {
 
 // Utility functions
 float *randArray(size_t size, float seed) {
-    float *arr = malloc(size * sizeof(float));
-    if (!arr) {free(arr); return NULL;}
+    if (size == 0) return NULL;
 
+    float *arr = malloc(size * sizeof(*arr));
+    if (!arr) return NULL;
+
+    // #pragma omp parallel for schedule(static)
+    // for (size_t i = 0; i < size; i++) {
+    //     arr[i] = sin((float)i / seed);
+    // }
+
+    uint32_t state = (uint32_t)(seed * 1000.0f) | 1u;
     #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < size; i++) {
-        arr[i] = sin((float)i / seed);
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        arr[i] = 2.0f * (ptype)state / (ptype)UINT32_MAX - 1.0f;
+
     }
 
     return arr;
@@ -97,9 +109,9 @@ float *randArray(size_t size, float seed) {
 
 void freeModel(Model *model) {
     if (!model) return;
-    free(model->layers);
-    free(model->params);
-    free(model->buffer);
+    if (model->layers) free(model->layers);
+    if (model->params) free(model->params);
+    if (model->buffer) free(model->buffer);
     free(model);
 }
 
@@ -112,7 +124,7 @@ Model *genModel(const ntype *layers, size_t layer_count, ActType a_type) {
         next_layer = layers[i + 1];
         if (layer == 0 || next_layer == 0) return NULL;
         b_c += layer;
-        w_c += layer * next_layer;
+        w_c += (size_t)layer * next_layer;
     }
 
     Model *model = malloc(sizeof(Model)); if (!model) goto fail;
@@ -144,7 +156,7 @@ Model *loadModel(const char *filename) {
     Model *model = malloc(sizeof(Model)); if (!model) return NULL;
 
     FILE *file = fopen(filename, "rb");
-    if (!file) free(model);
+    if (!file) {free(model); return NULL;}
 
     uint32_t type;
 

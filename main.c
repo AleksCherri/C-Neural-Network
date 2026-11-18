@@ -5,11 +5,11 @@
 #include "mlp.h"
 
 #define RANDOM_SCALE 2.0f
-#define D_MODEL      1024
+#define D_MODEL      4
 #define EXTENDING    4
 
 #define PRINTING 0 // Prints input and output vectors
-#define LOADING  0 // Loads Model from file
+#define LOADING  1 // Loads Model from file
 
 #if PRINTING
     #define PRT printf("\n\nInputs:\n");\
@@ -33,7 +33,6 @@ static double ms_between(const struct timespec *start, const struct timespec *en
     (end->tv_nsec - start->tv_nsec) / 1e6;
 }
 
-// gcc -std=c17 -Wall -Wextra -O3 -march=native -flto -fopenmp -ffast-math main.c -o main -lm && "./main"
 int main(void) {
     struct timespec t0, t1;
 
@@ -78,7 +77,6 @@ int main(void) {
         printf("\n\nTarget:\n");
         for (size_t i = 0; i < D_MODEL; i++) printf("%.3f, ", labels[i]);
     }
-    //printf("\n\nPress Enter: "); getchar();
 
     for (size_t i = 0; i < D_MODEL; i++) {
         outputs[i] = model->buffer[model->b_c - model->layers[model->l_c - 1] + i];
@@ -93,7 +91,7 @@ int main(void) {
 
     printf("\n\nMSE: %.3f\n", loss);
 
-    backProp(model, labels);
+    backProp(model, inputs, labels, 0.1);
 
     clock_gettime(CLOCK_MONOTONIC, &t0);
     freeModel(model);

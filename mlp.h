@@ -27,8 +27,8 @@ typedef struct {
 } Model;
 
 float *randArray(size_t size, float seed);
-void   MLP(Model *model, const ptype *inputs);
-void   backProp(Model *model, const ptype *labels);
+ptype *MLP(Model *model, const ptype *inputs);
+void   backProp(Model *model, const ptype *inputs, const ptype *labels, float learning_rate);
 void   freeModel(Model *model);
 Model *genModel(const ntype *layers, size_t layer_count, ActType a_type);
 Model *loadModel(const char *filename);

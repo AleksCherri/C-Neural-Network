@@ -7,6 +7,7 @@
 #include "mlp.h"
 
 // Activation functions & related utilities
+
 static inline ptype gelu(ptype x) {
     return x / (1.0f + expf(-1.702f * x));
 }
@@ -28,8 +29,24 @@ static ActFunc getAFunc(ActType type) {
     }
 }
 
+static inline ptype dAFunc(ActType type, ptype x) {
+    switch (type) {
+        case GeLU: {
+            const ptype s = 1.0f / (1.0f + expf(-1.702f * x));
+            return s + 1.702f * x * s * (1.0f - s);
+        }
+        case ReLU:  return x > 0.0f ? 1.0f : 0.0f;
+        case ReLU2: return x > 0.0f ? 2.0f * x : 0.0f;
+        default:    return 0.0f;
+    }
+}
+
 // Main perceptron functions
-void MLP(Model *model, const ptype *inputs) {
+
+// Multilayered Perceptron Forward
+ptype *MLP(Model *model, const ptype *inputs) {
+    if (!model) return NULL;
+
     const ptype *restrict params = model->params;
     ptype *restrict buffer = model->buffer;
 
@@ -45,6 +62,7 @@ void MLP(Model *model, const ptype *inputs) {
     }
 
     size_t n_ofs = 0, w_ofs = 0;
+    ptype *restrict buf_out;
 
     for (size_t i = 1; i < model->l_c; i++) {
         prev_layer = layer;
@@ -53,7 +71,7 @@ void MLP(Model *model, const ptype *inputs) {
         const ptype *restrict P = params + w_ofs;
         const ptype *restrict B = bias + n_ofs + prev_layer;
         ptype *restrict buf_in  = buffer + n_ofs;
-        ptype *restrict buf_out = buf_in + prev_layer;
+        buf_out = buf_in + prev_layer;
 
         #pragma omp parallel for schedule(static)
         for (size_t j = 0; j < layer; j++) {
@@ -67,41 +85,58 @@ void MLP(Model *model, const ptype *inputs) {
         n_ofs += prev_layer;
         w_ofs += prev_layer * layer;
     }
+
+    return buf_out;
 }
 
-void backProp(Model *model, const ptype *labels) {
-    const ptype *restrict buffer = model->buffer;
-    const ntype D_MODEL = model->layers[0];
-    ptype gradient[D_MODEL];
+void backProp(Model *model, const ptype *inputs, const ptype *labels, float learning_rate) {
+    if (!model) return;
 
-    for (size_t i = 0; i < D_MODEL; i++) {
-        ptype val = buffer[model->b_c - model->layers[model->l_c - 1] + i] - labels[i];
-        gradient[i] = val;
-        //printf("%.3f, ", val);
+    // ptype *restrict params = model->params;
+    // const ptype *restrict buffer = model->buffer;
+    // ptype *restrict bias = params + model->w_c;
+    // const ActType a_type = model->a_type;
+
+    const ntype D_MODEL = model->layers[model->l_c - 1];
+    const size_t ofs = model->b_c - D_MODEL;
+
+    ptype deltas[model->b_c];
+    ptype *delout = &deltas + ofs;
+    ptype *output = model->buffer + ofs;
+
+    #pragma omp parallel for schedule(static)
+    for (size_t i = D_MODEL; i >= 0; i--) {
+        delout[i] = (labels[i] - output[i]) * dAFunc(model->a_type, output[i]);
     }
 
+    size_t* next_layer, layer = model->buffer + model->b_c - D_MODEL;
+
+    for (size_t i = model->l_c - 2; i >= 0; i--) {
+        next_layer = layer;
+        layer -= model->layers[i];
+        delout -= model->layers[i];
+        for (size_t j = layer; j >= 0; j--) {
+            delout[j];
+        }
+    }
 }
 
 // Utility functions
+
 float *randArray(size_t size, float seed) {
     if (size == 0) return NULL;
 
     float *arr = malloc(size * sizeof(*arr));
     if (!arr) return NULL;
 
-    // #pragma omp parallel for schedule(static)
-    // for (size_t i = 0; i < size; i++) {
-    //     arr[i] = sin((float)i / seed);
-    // }
-
     uint32_t state = (uint32_t)(seed * 1000.0f) | 1u;
+
     #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < size; i++) {
         state ^= state << 13;
         state ^= state >> 17;
         state ^= state << 5;
         arr[i] = 2.0f * (ptype)state / (ptype)UINT32_MAX - 1.0f;
-
     }
 
     return arr;

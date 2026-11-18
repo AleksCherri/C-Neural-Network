@@ -149,6 +149,7 @@ Model *genModel(const ntype *layers, size_t layer_count, ActType a_type) {
 
     fail:
     freeModel(model);
+    printf("\nFAILED TO GEN!\n");
     return NULL;
 }
 
@@ -163,6 +164,7 @@ Model *loadModel(const char *filename) {
     if (fread(&type, sizeof(type), 1, file) != 1) goto fail;
 
     model->a_type = (ActType)type;
+    if (!model->a_type) goto fail;
     model->a_func = getAFunc(model->a_type);
 
     size_t size = sizeof(size_t);
@@ -172,7 +174,10 @@ Model *loadModel(const char *filename) {
         fread(&model->w_c, size, 1, file) != 1
     ) goto fail;
 
-    if (model->l_c <= 0 || model->b_c <= 0 || model->w_c <= 0) goto fail;
+    if (
+        model->l_c <= 0 || model->b_c <= 0 ||
+        model->w_c <= 0 || model->l_c > 1024
+    ) goto fail;
 
     model->layers = malloc(model->l_c * sizeof(ntype));
     model->params = malloc((model->w_c + model->b_c) * sizeof(ptype));
@@ -197,6 +202,7 @@ Model *loadModel(const char *filename) {
     fail:
     fclose(file);
     freeModel(model);
+    printf("\nFAILED TO LOAD!\n");
     return NULL;
 }
 
@@ -232,5 +238,6 @@ int saveModel(const char *filename, const Model *model) {
 
     fail:
     fclose(file);
+    printf("\nFAILED TO SAVE!\n");
     return -1;
 }

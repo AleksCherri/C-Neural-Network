@@ -124,12 +124,13 @@ void backProp(Model *model, const ptype *inputs, const ptype *labels, float lear
         #pragma omp parallel for schedule(static)
         for (int j = layer; j >= 0; j--) {
             ptype val = 0;
+
             for (int k = next_layer; k >= 0; k--) {
                 val += delin[k] * P[j + k*layer];
             }
-            delout[j] = val;
+            delout[j] = dAFunc(model->a_type, val);
         }
-        //for (int j = layer; j >= 0; j--) printf("%.3f, ", delout[j]);
+        for (int j = layer; j >= 0; j--) printf("%.3f, ", delout[j]);
     }
 }
 

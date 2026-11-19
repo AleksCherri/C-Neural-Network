@@ -93,9 +93,9 @@ void backProp(Model *model, const ptype *inputs, const ptype *labels, float lear
     if (!model) return;
 
     ptype *restrict params = model->params;
-    // const ptype *restrict buffer = model->buffer;
-    ptype *restrict bias = params + model->w_c;
-    // const ActType a_type = model->a_type;
+    ptype *restrict buffer = model->buffer;
+    //ptype *restrict bias = params + model->w_c;
+    //const ActType a_type = model->a_type;
 
     const ntype D_MODEL = model->layers[model->l_c - 1];
     const size_t ofs = model->b_c - D_MODEL;
@@ -103,34 +103,36 @@ void backProp(Model *model, const ptype *inputs, const ptype *labels, float lear
     ptype deltas[model->b_c];
     ptype *delout = (ptype *)deltas + ofs;
     ptype *output = model->buffer + ofs;
+    ptype *bufin = buffer + ofs;
 
     #pragma omp parallel for schedule(static)
-    for (int i = D_MODEL; i >= 0; i--) {
+    for (int i = (int)D_MODEL - 1; i >= 0; i--) {
         delout[i] = (labels[i] - output[i]) * dAFunc(model->a_type, output[i]);
     }
 
-    size_t next_layer, layer = D_MODEL;
+    int next_layer, layer = (int)D_MODEL;
     //size_t n_ofs = model->b_c - D_MODEL;
-    size_t w_ofs = model->w_c;
+    int w_ofs = (int)model->w_c;
 
-    for (int i = model->l_c - 2; i >= 0; i--) {
+    for (int i = (int)model->l_c - 2; i >= 0; i--) {
         next_layer = layer;
-        layer = model->layers[i];
+        layer = (int)model->layers[i];
         w_ofs -= next_layer * layer;
         const ptype *restrict P = params + w_ofs;
         ptype *delin = delout;
         delout -= layer;
+        bufin -= layer;
 
         #pragma omp parallel for schedule(static)
-        for (int j = layer; j >= 0; j--) {
+        for (int j = layer - 1; j >= 0; j--) {
             ptype val = 0;
 
-            for (int k = next_layer; k >= 0; k--) {
-                val += delin[k] * P[j + k*layer];
+            for (int k = next_layer - 1; k >= 0; k--) {
+                val += delin[k] * P[j + k * layer];
             }
-            delout[j] = dAFunc(model->a_type, val);
+            delout[j] = val * dAFunc(model->a_type, bufin[j]);
         }
-        for (int j = layer; j >= 0; j--) printf("%.3f, ", delout[j]);
+        for (int j = layer - 1; j >= 0; j--) printf("%.3f, ", delout[j]);
     }
 }
 

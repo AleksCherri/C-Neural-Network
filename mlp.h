@@ -23,7 +23,8 @@ typedef struct {
     size_t b_c;     /* Number of biases (nodes) */
     size_t w_c;     /* Number of weights */
     ptype *params;  /* Parameters weights[w_c] + biases[b_c] */
-    ptype *buffer;  /* Buffer of activations for backpropagation */
+    ptype *buffer;  /* Buffer of values post-activation */
+    ptype *zbuffr; /* Buffer of values pre-activation for backpropagation*/
 } Model;
 
 float *randArray(size_t size, float seed);

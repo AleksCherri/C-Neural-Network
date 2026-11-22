@@ -63,6 +63,7 @@ ptype *MLP(Model *model, const ptype *inputs) {
 
     size_t n_ofs = 0, w_ofs = 0;
     ptype *restrict buf_out;
+    ptype *restrict bufz = model->zbuffr;
 
     for (size_t i = 1; i < model->l_c; i++) {
         prev_layer = layer;
@@ -72,6 +73,7 @@ ptype *MLP(Model *model, const ptype *inputs) {
         const ptype *restrict B = bias + n_ofs + prev_layer;
         ptype *restrict buf_in  = buffer + n_ofs;
         buf_out = buf_in + prev_layer;
+        bufz = b
 
         #pragma omp parallel for schedule(static)
         for (size_t j = 0; j < layer; j++) {
@@ -89,6 +91,7 @@ ptype *MLP(Model *model, const ptype *inputs) {
     return buf_out;
 }
 
+// Backprogapation function
 void backProp(Model *model, const ptype *inputs, const ptype *labels, float learning_rate) {
     if (!model) return;
 
@@ -111,7 +114,6 @@ void backProp(Model *model, const ptype *inputs, const ptype *labels, float lear
     }
 
     int next_layer, layer = (int)D_MODEL;
-    //size_t n_ofs = model->b_c - D_MODEL;
     int w_ofs = (int)model->w_c;
 
     for (int i = (int)model->l_c - 2; i >= 0; i--) {
@@ -162,7 +164,29 @@ void freeModel(Model *model) {
     if (model->layers) free(model->layers);
     if (model->params) free(model->params);
     if (model->buffer) free(model->buffer);
+    if (model->zbuffr) free(model->zbuffr);
     free(model);
+}
+
+Model *allocModel(size_t layer_count, size_t b_c, size_t w_c) {
+    Model *model = malloc(sizeof(Model)); if (!model) goto fail;
+
+    model->layers = malloc(layer_count * sizeof(ntype));
+    model->params = randArray(b_c + w_c, 3.14f);
+    model->buffer = malloc(b_c * sizeof(ptype));
+    model->zbuffr = malloc(b_c * sizeof(ptype));
+
+    if (
+        !model->layers || !model->params ||
+        !model->buffer || !model->zbuffr
+    ) goto fail;
+
+    return model;
+
+    fail:
+    freeModel(model);
+    printf("\nMEMORY ALLOCATION FAILED!\n");
+    return NULL;
 }
 
 Model *genModel(const ntype *layers, size_t layer_count, ActType a_type) {
@@ -177,17 +201,11 @@ Model *genModel(const ntype *layers, size_t layer_count, ActType a_type) {
         w_c += (size_t)layer * next_layer;
     }
 
-    Model *model = malloc(sizeof(Model)); if (!model) goto fail;
+    Model *model = allocModel(layer_count, b_c, w_c); if (!model) goto fail;
 
     model->a_type = a_type;
     model->a_func = getAFunc(a_type);
     if (!model->a_func) goto fail;
-
-    model->layers = malloc(layer_count * sizeof(ntype));
-    model->params = randArray(b_c + w_c, 3.14f);
-    model->buffer = malloc(b_c * sizeof(ptype));
-
-    if (!model->layers || !model->params || !model->buffer) goto fail;
 
     memcpy(model->layers, layers, layer_count * sizeof(ntype));
 
@@ -198,18 +216,28 @@ Model *genModel(const ntype *layers, size_t layer_count, ActType a_type) {
     return model;
 
     fail:
-    freeModel(model);
     printf("\nFAILED TO GEN!\n");
     return NULL;
 }
 
 Model *loadModel(const char *filename) {
-    Model *model = malloc(sizeof(Model)); if (!model) return NULL;
 
     FILE *file = fopen(filename, "rb");
-    if (!file) {free(model); return NULL;}
+    if (!file) goto fail;
 
     uint32_t type;
+    size_t l_c;
+    size_t b_c;
+    size_t w_c;
+
+    size_t size = sizeof(size_t);
+    if (
+        fread(&l_c, size, 1, file) != 1 ||
+        fread(&w_c, size, 1, file) != 1 ||
+        fread(&b_c, size, 1, file) != 1
+    ) goto fail;
+
+    Model *model = allocModel(l_c, b_c, w_c); if (!model) goto fail;
 
     if (fread(&type, sizeof(type), 1, file) != 1) goto fail;
 
@@ -217,23 +245,10 @@ Model *loadModel(const char *filename) {
     if (!model->a_type) goto fail;
     model->a_func = getAFunc(model->a_type);
 
-    size_t size = sizeof(size_t);
-    if (
-        fread(&model->l_c, size, 1, file) != 1 ||
-        fread(&model->b_c, size, 1, file) != 1 ||
-        fread(&model->w_c, size, 1, file) != 1
-    ) goto fail;
-
     if (
         model->l_c <= 0 || model->b_c <= 0 ||
         model->w_c <= 0 || model->l_c > 1024
     ) goto fail;
-
-    model->layers = malloc(model->l_c * sizeof(ntype));
-    model->params = malloc((model->w_c + model->b_c) * sizeof(ptype));
-    model->buffer = malloc(model->b_c * sizeof(ptype));
-
-    if (!model->layers || !model->params || !model->buffer) goto fail;
 
     if (
         fread(model->layers, sizeof(ntype), model->l_c, file)
@@ -250,8 +265,7 @@ Model *loadModel(const char *filename) {
     return model;
 
     fail:
-    fclose(file);
-    freeModel(model);
+    if (file) fclose(file);
     printf("\nFAILED TO LOAD!\n");
     return NULL;
 }
@@ -261,16 +275,16 @@ int saveModel(const char *filename, const Model *model) {
     if (!file) goto fail;
 
     uint32_t type = (uint32_t)model->a_type;
-
-    if (
-        fwrite(&type, sizeof(type), 1, file) != 1
-    ) goto fail;
     
     size_t size = sizeof(size_t);
     if (
         fwrite(&model->l_c, size, 1, file) != 1 ||
-        fwrite(&model->b_c, size, 1, file) != 1 ||
-        fwrite(&model->w_c, size, 1, file) != 1
+        fwrite(&model->w_c, size, 1, file) != 1 ||
+        fwrite(&model->b_c, size, 1, file) != 1
+    ) goto fail;
+
+    if (
+        fwrite(&type, sizeof(type), 1, file) != 1
     ) goto fail;
 
     if (model->l_c > 0) {
@@ -287,7 +301,7 @@ int saveModel(const char *filename, const Model *model) {
     return 0;
 
     fail:
-    fclose(file);
+    if (file) fclose(file);
     printf("\nFAILED TO SAVE!\n");
     return -1;
 }

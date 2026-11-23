@@ -226,43 +226,42 @@ Model *genModel(const ntype *layers, size_t layer_count, ActType a_type) {
 Model *loadModel(const char *filename) {
 
     FILE *file = fopen(filename, "rb");
-    if (!file) goto fail;
+    if (!file) {puts("ERROR: No file"); goto fail;}
 
-    uint32_t type;
     size_t l_c;
     size_t b_c;
     size_t w_c;
+    uint32_t type;
 
     size_t size = sizeof(size_t);
     if (
         fread(&l_c, size, 1, file) != 1 ||
         fread(&w_c, size, 1, file) != 1 ||
-        fread(&b_c, size, 1, file) != 1
-    ) goto fail;
+        fread(&b_c, size, 1, file) != 1 ||
+        fread(&type, sizeof(type), 1, file) != 1
+    ) {puts("ERROR: No hyperparameters"); goto fail;}
 
     Model *model = allocModel(l_c, b_c, w_c); if (!model) goto fail;
 
-    if (fread(&type, sizeof(type), 1, file) != 1) goto fail;
-
     model->a_type = (ActType)type;
-    if (!model->a_type) goto fail;
+    if (!model->a_type) {puts("ERROR: No afunc type"); goto fail;}
     model->a_func = getAFunc(model->a_type);
 
     if (
         model->l_c <= 0 || model->b_c <= 0 ||
         model->w_c <= 0 || model->l_c > 1024
-    ) goto fail;
+    ) printf("ERROR: Counters are out of bounds: %zu, %zu\n", model->l_c, model->w_c);
 
     if (
         fread(model->layers, sizeof(ntype), model->l_c, file)
         != (size_t)model->l_c
-    ) goto fail;
+    ) {puts("ERROR: Layer count mismatch"); goto fail;}
 
     size = model->b_c + model->w_c;
     if (
         fread(model->params, sizeof(ptype), size, file)
         != size
-    ) goto fail;
+    ) {puts("ERROR: Parameter count mismatch"); goto fail;}
 
     fclose(file);
     return model;
@@ -275,7 +274,7 @@ Model *loadModel(const char *filename) {
 
 int saveModel(const char *filename, const Model *model) {
     FILE *file = fopen(filename, "wb");
-    if (!file) goto fail;
+    if (!file) {puts("ERROR: No file"); goto fail;}
 
     uint32_t type = (uint32_t)model->a_type;
     
@@ -284,20 +283,21 @@ int saveModel(const char *filename, const Model *model) {
         fwrite(&model->l_c, size, 1, file) != 1 ||
         fwrite(&model->w_c, size, 1, file) != 1 ||
         fwrite(&model->b_c, size, 1, file) != 1
-    ) goto fail;
+    ) {puts("ERROR: Cannot write hyperparameters"); goto fail;}
 
     if (
         fwrite(&type, sizeof(type), 1, file) != 1
-    ) goto fail;
+    ) {puts("ERROR: Cannot write afunc type"); goto fail;}
 
     if (model->l_c > 0) {
         if (fwrite(model->layers, sizeof(ntype), model->l_c, file)
-        != (size_t)model->l_c) goto fail;
+        != (size_t)model->l_c) {puts("ERROR: Layer count mismatch"); goto fail;}
     }
 
     if (model->b_c > 0 && model->w_c > 0) {
         size_t p_c = model->b_c + model->w_c;
-        if (fwrite(model->params, sizeof(ptype), p_c, file) != p_c) goto fail;
+        if (fwrite(model->params, sizeof(ptype), p_c, file) != p_c)
+        {puts("ERROR: Parameter count mismatch"); goto fail;}
     }
 
     fclose(file);

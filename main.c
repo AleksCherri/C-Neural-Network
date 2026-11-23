@@ -8,7 +8,7 @@
 #define D_MODEL      2
 #define EXTENDING    1
 
-#define PRINTING 0 // Prints input and output vectors
+#define PRINTING 1 // Prints input and output vectors
 #define LOADING  1 // Loads Model from file
 
 #define AFUNC ReLU2

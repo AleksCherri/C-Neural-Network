@@ -11,7 +11,7 @@
 #define PRINTING 1 // Prints input and output vectors
 #define LOADING  1 // Loads Model from file
 
-#define AFUNC ReLU2
+#define AFUNC ReLU
 
 #if PRINTING
     #define PRT printf("\n\nInputs:\n");\
@@ -95,8 +95,8 @@ int main(void) {
 
     for (size_t i = 0; i < model->b_c; i++) printf("%.3f, ", model->zbuffr[i]);
     printf("\n");
-    for (size_t i = 0; i < model->b_c; i++) printf("%.3f, ", model->buffer[i]);
-    //backProp(model, inputs, labels, 0.1);
+    //for (size_t i = 0; i < model->b_c; i++) printf("%.3f, ", model->buffer[i]);
+    backProp(model, inputs, labels, 0.1);
 
     clock_gettime(CLOCK_MONOTONIC, &t0);
     freeModel(model);

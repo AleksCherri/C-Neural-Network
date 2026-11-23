@@ -8,8 +8,10 @@
 #define D_MODEL      2
 #define EXTENDING    1
 
-#define PRINTING 1 // Prints input and output vectors
-#define LOADING  0 // Loads Model from file
+#define PRINTING 0 // Prints input and output vectors
+#define LOADING  1 // Loads Model from file
+
+#define AFUNC ReLU2
 
 #if PRINTING
     #define PRT printf("\n\nInputs:\n");\
@@ -47,7 +49,7 @@ int main(void) {
         ntype layers[] = {D_MODEL, D_MODEL * EXTENDING, D_MODEL};
         size_t layer_count = sizeof(layers) / sizeof(layers[0]);
 
-        model = genModel(layers, layer_count, ReLU);
+        model = genModel(layers, layer_count, AFUNC);
     }
     clock_gettime(CLOCK_MONOTONIC, &t1);
 
@@ -91,7 +93,10 @@ int main(void) {
 
     printf("\n\nMSE: %.3f\n", loss);
 
-    backProp(model, inputs, labels, 0.1);
+    for (size_t i = 0; i < model->b_c; i++) printf("%.3f, ", model->zbuffr[i]);
+    printf("\n");
+    for (size_t i = 0; i < model->b_c; i++) printf("%.3f, ", model->buffer[i]);
+    //backProp(model, inputs, labels, 0.1);
 
     clock_gettime(CLOCK_MONOTONIC, &t0);
     freeModel(model);

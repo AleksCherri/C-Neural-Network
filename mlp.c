@@ -49,6 +49,7 @@ ptype *MLP(Model *model, const ptype *inputs) {
 
     const ptype *restrict params = model->params;
     ptype *restrict buffer = model->buffer;
+    ptype *restrict bufz = model->zbuffr;
 
     const size_t w_c = model->w_c;
     const ptype *restrict bias = params + w_c;
@@ -58,12 +59,13 @@ ptype *MLP(Model *model, const ptype *inputs) {
 
     #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < layer; i++) {
-        buffer[i] = inputs[i] + bias[i];
+        ptype value = inputs[i] + bias[i];
+        bufz[i] = value;
+        buffer[i] = model->a_func(value);
     }
 
     size_t n_ofs = 0, w_ofs = 0;
     ptype *restrict buf_out;
-    ptype *restrict bufz = model->zbuffr;
 
     for (size_t i = 1; i < model->l_c; i++) {
         prev_layer = layer;
@@ -73,7 +75,7 @@ ptype *MLP(Model *model, const ptype *inputs) {
         const ptype *restrict B = bias + n_ofs + prev_layer;
         ptype *restrict buf_in  = buffer + n_ofs;
         buf_out = buf_in + prev_layer;
-        bufz = b
+        bufz += prev_layer;
 
         #pragma omp parallel for schedule(static)
         for (size_t j = 0; j < layer; j++) {
@@ -82,6 +84,7 @@ ptype *MLP(Model *model, const ptype *inputs) {
             for (size_t k = 0; k < prev_layer; k++) {
                 value += buf_in[k] * par[k];
             }
+            bufz[j] = value;
             buf_out[j] = model->a_func(value);
         }
         n_ofs += prev_layer;

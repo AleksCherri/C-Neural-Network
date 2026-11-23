@@ -184,6 +184,10 @@ Model *allocModel(size_t layer_count, size_t b_c, size_t w_c) {
         !model->buffer || !model->zbuffr
     ) goto fail;
 
+    model->l_c = layer_count;
+    model->b_c = b_c;
+    model->w_c = w_c;
+
     return model;
 
     fail:
@@ -211,10 +215,6 @@ Model *genModel(const ntype *layers, size_t layer_count, ActType a_type) {
     if (!model->a_func) goto fail;
 
     memcpy(model->layers, layers, layer_count * sizeof(ntype));
-
-    model->l_c = layer_count;
-    model->b_c = b_c;
-    model->w_c = w_c;
 
     return model;
 
@@ -250,7 +250,7 @@ Model *loadModel(const char *filename) {
     if (
         model->l_c <= 0 || model->b_c <= 0 ||
         model->w_c <= 0 || model->l_c > 1024
-    ) printf("ERROR: Counters are out of bounds: %zu, %zu\n", model->l_c, model->w_c);
+    ) {printf("ERROR: Counters are out of bounds: %zu, %zu\n", model->l_c, model->w_c); goto fail;}
 
     if (
         fread(model->layers, sizeof(ntype), model->l_c, file)
@@ -282,12 +282,9 @@ int saveModel(const char *filename, const Model *model) {
     if (
         fwrite(&model->l_c, size, 1, file) != 1 ||
         fwrite(&model->w_c, size, 1, file) != 1 ||
-        fwrite(&model->b_c, size, 1, file) != 1
-    ) {puts("ERROR: Cannot write hyperparameters"); goto fail;}
-
-    if (
+        fwrite(&model->b_c, size, 1, file) != 1 ||
         fwrite(&type, sizeof(type), 1, file) != 1
-    ) {puts("ERROR: Cannot write afunc type"); goto fail;}
+    ) {puts("ERROR: Cannot write hyperparameters"); goto fail;}
 
     if (model->l_c > 0) {
         if (fwrite(model->layers, sizeof(ntype), model->l_c, file)

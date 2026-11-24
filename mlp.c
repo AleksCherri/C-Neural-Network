@@ -96,8 +96,7 @@ void backProp(Model *model, const ptype *inputs, const ptype *labels, float lear
 
     ptype *restrict params = model->params + model->w_c;
     ptype *restrict buffer = model->buffer;
-    //ptype *restrict bias = params + model->w_c;
-    //const ActType a_type = model->a_type;
+    ptype *restrict bias = params + model->w_c;
 
     const int D_MODEL = (int)model->layers[model->l_c - 1];
     const size_t ofs = model->b_c - model->layers[model->l_c - 1];
@@ -141,12 +140,17 @@ void backProp(Model *model, const ptype *inputs, const ptype *labels, float lear
     for (size_t i = 1; i < model->l_c; i++) {
         prev_layer = cur_layer;
         cur_layer = model->layers[i];
+        delout += layer;
 
+        #pragma omp parallel for schedule(static)
         for (size_t j = 0; j < cur_layer; j++) {
+            ptype *restrict par = params + j * prev_layer;
+            bias[j] += learning_rate;
             for (size_t k = 0; k < prev_layer; k++) {
-
+                par[k] += delout[j] * buffer[k] * learning_rate;
             }
         }
+        params += prev_layer * cur_layer;
     }
 }
 

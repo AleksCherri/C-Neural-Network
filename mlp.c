@@ -60,7 +60,7 @@ ptype *MLP(Model *model, const ptype *inputs) {
     for (size_t i = 0; i < layer; i++) {
         ptype value = inputs[i] + bias[i];
         bufz[i] = value;
-        buffer[i] = model->a_func(value);
+        buffer[i] = value;
     }
 
     ptype *restrict buf_in = buffer;
@@ -94,33 +94,33 @@ ptype *MLP(Model *model, const ptype *inputs) {
 void backProp(Model *model, const ptype *inputs, const ptype *labels, float learning_rate) {
     if (!model) return;
 
-    ptype *restrict params = model->params;
-    ptype *restrict buffer = model->zbuffr;
+    ptype *restrict params = model->params + model->w_c;
+    ptype *restrict buffer = model->buffer;
     //ptype *restrict bias = params + model->w_c;
     //const ActType a_type = model->a_type;
 
-    const ntype D_MODEL = model->layers[model->l_c - 1];
-    const size_t ofs = model->b_c - D_MODEL;
+    const int D_MODEL = (int)model->layers[model->l_c - 1];
+    const size_t ofs = model->b_c - model->layers[model->l_c - 1];
 
     ptype deltas[model->b_c];
     ptype *delout = (ptype *)deltas + ofs;
-    ptype *output = model->buffer + ofs;
-    ptype *bufin = buffer + ofs;
+    ptype *output = MLP(model, inputs); //model->buffer + ofs;
+    ptype *bufin = model->zbuffr + ofs;
+
 
     #pragma omp parallel for schedule(static)
-    for (int i = (int)D_MODEL - 1; i >= 0; i--) {
+    for (int i = D_MODEL - 1; i >= 0; i--) {
         delout[i] = (labels[i] - output[i]) * dAFunc(model->a_type, bufin[i]);
     }
-    for (int i = (int)D_MODEL - 1; i >= 0; i--) printf("%.3f, ", delout[i]);
+    for (int i = D_MODEL - 1; i >= 0; i--) printf("%.3f, ", delout[i]);
 
-    int next_layer, layer = (int)D_MODEL;
-    int w_ofs = (int)model->w_c;
+    int next_layer, layer = D_MODEL;
 
-    for (int i = (int)model->l_c - 2; i >= 0; i--) {
+    for (int i = (int)model->l_c - 2; i > 0; i--) {
         next_layer = layer;
         layer = (int)model->layers[i];
-        w_ofs -= next_layer * layer;
-        const ptype *restrict P = params + w_ofs;
+
+        params -= next_layer * layer;
         ptype *delin = delout;
         delout -= layer;
         bufin -= layer;
@@ -128,13 +128,25 @@ void backProp(Model *model, const ptype *inputs, const ptype *labels, float lear
         #pragma omp parallel for schedule(static)
         for (int j = layer - 1; j >= 0; j--) {
             ptype val = 0;
-
+            const ptype *restrict par = params + j;
             for (int k = next_layer - 1; k >= 0; k--) {
-                val += delin[k] * P[j + k * layer];
+                val += delin[k] * par[k * layer];
             }
             delout[j] = val * dAFunc(model->a_type, bufin[j]);
         }
         for (int j = layer - 1; j >= 0; j--) printf("%.3f, ", delout[j]);
+    }
+
+    size_t prev_layer, cur_layer = model->layers[0];
+    for (size_t i = 1; i < model->l_c; i++) {
+        prev_layer = cur_layer;
+        cur_layer = model->layers[i];
+
+        for (size_t j = 0; j < cur_layer; j++) {
+            for (size_t k = 0; k < prev_layer; k++) {
+
+            }
+        }
     }
 }
 

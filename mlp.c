@@ -63,7 +63,6 @@ ptype *MLP(Model *model, const ptype *inputs) {
         buffer[i] = model->a_func(value);
     }
 
-    bias += layer;
     ptype *restrict buf_in = buffer;
 
     for (size_t i = 1; i < model->l_c; i++) {
@@ -147,10 +146,9 @@ float *randArray(size_t size, float seed) {
     float *arr = malloc(size * sizeof(*arr));
     if (!arr) return NULL;
 
-    uint32_t state = (uint32_t)(seed * 1000.0f) | 1u;
-
     #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < size; i++) {
+        uint32_t state = ((uint32_t)(seed * 1000.0f) ^ (uint32_t)(i * 2654435761u)) | 1u;
         state ^= state << 13;
         state ^= state >> 17;
         state ^= state << 5;
@@ -241,8 +239,8 @@ Model *loadModel(const char *filename) {
 
     Model *model = allocModel(l_c, b_c, w_c); if (!model) goto fail;
 
+    if (type > ReLU2) {puts("ERROR: No afunc type"); goto fail;}
     model->a_type = (ActType)type;
-    if (!model->a_type) {puts("ERROR: No afunc type"); goto fail;}
     model->a_func = getAFunc(model->a_type);
 
     if (

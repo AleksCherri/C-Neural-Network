@@ -96,7 +96,7 @@ void backProp(Model *model, const ptype *inputs, const ptype *labels, float lear
 
     ptype *restrict params = model->params + model->w_c;
     ptype *restrict buffer = model->buffer;
-    ptype *restrict bias = params + model->w_c;
+    ptype *restrict bias = model->params + model->w_c;
 
     const int D_MODEL = (int)model->layers[model->l_c - 1];
     const size_t ofs = model->b_c - model->layers[model->l_c - 1];
@@ -111,7 +111,7 @@ void backProp(Model *model, const ptype *inputs, const ptype *labels, float lear
     for (int i = D_MODEL - 1; i >= 0; i--) {
         delout[i] = (labels[i] - output[i]) * dAFunc(model->a_type, bufin[i]);
     }
-    for (int i = D_MODEL - 1; i >= 0; i--) printf("%.3f, ", delout[i]);
+    //for (int i = D_MODEL - 1; i >= 0; i--) printf("%.3f, ", delout[i]);
 
     int next_layer, layer = D_MODEL;
 
@@ -128,29 +128,33 @@ void backProp(Model *model, const ptype *inputs, const ptype *labels, float lear
         for (int j = layer - 1; j >= 0; j--) {
             ptype val = 0;
             const ptype *restrict par = params + j;
-            for (int k = next_layer - 1; k >= 0; k--) {
+            for (int k = next_layer - 1; k >= 0; k--)
                 val += delin[k] * par[k * layer];
-            }
             delout[j] = val * dAFunc(model->a_type, bufin[j]);
         }
-        for (int j = layer - 1; j >= 0; j--) printf("%.3f, ", delout[j]);
     }
 
-    size_t prev_layer, cur_layer = model->layers[0];
-    for (size_t i = 1; i < model->l_c; i++) {
-        prev_layer = cur_layer;
-        cur_layer = model->layers[i];
-        delout += layer;
+    params = model->params;
+    bias   = model->params + model->w_c + model->layers[0];
+    buffer = model->buffer;
+    delout = deltas + model->layers[0];
 
+    size_t prev_layer = model->layers[0];
+    for (size_t i = 1; i < model->l_c; i++) {
+        const size_t cur_layer = model->layers[i];
         #pragma omp parallel for schedule(static)
         for (size_t j = 0; j < cur_layer; j++) {
+            const ptype adj = delout[j] * learning_rate;
+            bias[j] += adj;
             ptype *restrict par = params + j * prev_layer;
-            bias[j] += learning_rate;
-            for (size_t k = 0; k < prev_layer; k++) {
-                par[k] += delout[j] * buffer[k] * learning_rate;
-            }
+            for (size_t k = 0; k < prev_layer; k++)
+                par[k] += adj * buffer[k];
         }
         params += prev_layer * cur_layer;
+        bias   += cur_layer;
+        buffer += prev_layer;
+        delout += cur_layer;
+        prev_layer = cur_layer;
     }
 }
 

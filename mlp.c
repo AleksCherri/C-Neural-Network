@@ -91,7 +91,7 @@ ptype *MLP(Model *model, const ptype *inputs) {
 }
 
 // Backprogapation function
-void backProp(Model *model, const ptype *inputs, const ptype *labels, float learning_rate) {
+void backProp(Model *model, const ptype *inputs, const ptype *labels, const ptype learning_rate) {
     if (!model) return;
 
     ptype *restrict params = model->params + model->w_c;
@@ -101,8 +101,9 @@ void backProp(Model *model, const ptype *inputs, const ptype *labels, float lear
     const int D_MODEL = (int)model->layers[model->l_c - 1];
     const size_t ofs = model->b_c - model->layers[model->l_c - 1];
 
-    ptype deltas[model->b_c];
-    ptype *delout = (ptype *)deltas + ofs;
+    //ptype deltas[model->b_c];
+    ptype *deltas = malloc(sizeof(ptype) * model->b_c);
+    ptype *delout = deltas + ofs;
     ptype *output = MLP(model, inputs); //model->buffer + ofs;
     ptype *bufin = model->zbuffr + ofs;
 
@@ -111,7 +112,6 @@ void backProp(Model *model, const ptype *inputs, const ptype *labels, float lear
     for (int i = D_MODEL - 1; i >= 0; i--) {
         delout[i] = (labels[i] - output[i]) * dAFunc(model->a_type, bufin[i]);
     }
-    //for (int i = D_MODEL - 1; i >= 0; i--) printf("%.3f, ", delout[i]);
 
     int next_layer, layer = D_MODEL;
 
@@ -156,6 +156,18 @@ void backProp(Model *model, const ptype *inputs, const ptype *labels, float lear
         delout += cur_layer;
         prev_layer = cur_layer;
     }
+
+    free(deltas);
+}
+
+void fit(
+    Model *model,
+    const ptype *inputs,
+    const ptype *labels,
+    const ptype learning_rate,
+    const size_t epochs
+) {
+    return;
 }
 
 // Utility functions

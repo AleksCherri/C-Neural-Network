@@ -5,8 +5,8 @@
 #include "mlp.h"
 
 #define RANDOM_SCALE 2.0f
-#define D_MODEL      2
-#define EXTENDING    1
+#define D_MODEL      8
+#define EXTENDING    4
 
 #define PRINTING 1 // Prints input and output vectors
 #define LOADING  1 // Loads Model from file
@@ -21,10 +21,6 @@
     }\
     for (size_t i = 0; i < model->layers[0]; i++) {\
         printf("%.3f, ", inputs[i]);\
-    }\
-    printf("\n\nOutputs:\n");\
-    for (size_t i = model->b_c-model->layers[model->l_c - 1]; i < model->b_c; i++) {\
-        printf("%.3f, ", model->buffer[i]);\
     }
 #else
     #define PRT
@@ -35,12 +31,29 @@ static double ms_between(const struct timespec *start, const struct timespec *en
     (end->tv_nsec - start->tv_nsec) / 1e6;
 }
 
+static ptype MSE(const ptype *outputs, const ptype *labels) {
+    ptype loss = 0;
+    for (size_t i = 0; i < D_MODEL; i++) {
+        float val = labels[i] - outputs[i];
+        loss += val * val;
+    }
+    return loss / D_MODEL;
+}
+
+void prtout(const Model *model) {
+    printf("Outputs:\n");
+    for (size_t i = model->b_c-model->layers[model->l_c - 1]; i < model->b_c; i++) {
+        printf("%.3f, ", model->buffer[i]);
+    }
+    puts("\n");
+}
+
 int main(void) {
     struct timespec t0, t1;
 
-    ptype inputs[D_MODEL] = {1,1};
-    ptype labels[D_MODEL] = {1,1};
-    ptype outputs[D_MODEL];
+    ptype inputs[D_MODEL] = {1,2,3,4,5,6,7,8};
+    ptype labels[D_MODEL] = {1,2,3,4,5,6,7,8};
+    ptype *outputs;
 
     clock_gettime(CLOCK_MONOTONIC, &t0);
     Model *model;
@@ -80,23 +93,17 @@ int main(void) {
         for (size_t i = 0; i < D_MODEL; i++) printf("%.3f, ", labels[i]);
     }
 
-    for (size_t i = 0; i < D_MODEL; i++) {
-        outputs[i] = model->buffer[model->b_c - model->layers[model->l_c - 1] + i];
+    outputs = MLP(model, inputs);
+    printf("\n\nMSE: %.3f\n", MSE(outputs, labels));
+
+    prtout(model);
+
+    for (size_t i = 0; i < 10; i++) {
+        backProp(model, inputs, labels, 0.001);
+        outputs = MLP(model, inputs);
+        printf("MSE: %.3f\n", MSE(outputs, labels));
+        prtout(model);
     }
-
-    ptype loss = 0;
-    for (size_t i = 0; i < D_MODEL; i++) {
-        float val = labels[i] - outputs[i];
-        loss += val * val;
-    }
-    loss /= D_MODEL;
-
-    printf("\n\nMSE: %.3f\n", loss);
-
-    for (size_t i = 0; i < model->b_c; i++) printf("%.3f, ", model->zbuffr[i]);
-    printf("\n");
-    //for (size_t i = 0; i < model->b_c; i++) printf("%.3f, ", model->buffer[i]);
-    backProp(model, inputs, labels, 0.1);
 
     clock_gettime(CLOCK_MONOTONIC, &t0);
     freeModel(model);

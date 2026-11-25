@@ -20,6 +20,10 @@ static inline ptype relu2(ptype x) {
     return x > 0.0f ? x * x : 0.0f;
 }
 
+static inline ptype sigmoid(ptype x) {
+    return 1.0f / (1.0f + expf(-x));
+}
+
 static ActFunc getAFunc(ActType type) {
     switch (type) {
         case GeLU:  return gelu;
@@ -179,13 +183,14 @@ float *randArray(size_t size, float seed) {
     if (!arr) return NULL;
 
     #pragma omp parallel for schedule(static)
-    for (size_t i = 0; i < size; i++) {
-        uint32_t state = ((uint32_t)(seed * 1000.0f) ^ (uint32_t)(i * 2654435761u)) | 1u;
-        state ^= state << 13;
-        state ^= state >> 17;
-        state ^= state << 5;
-        arr[i] = 2.0f * (ptype)state / (ptype)UINT32_MAX - 1.0f;
-    }
+    // for (size_t i = 0; i < size; i++) {
+    //     uint32_t state = ((uint32_t)(seed * 1000.0f) ^ (uint32_t)(i * 2654435761u)) | 1u;
+    //     state ^= state << 13;
+    //     state ^= state >> 17;
+    //     state ^= state << 5;
+    //     arr[i] = 2.0f * (ptype)state / (ptype)UINT32_MAX - 1.0f;
+    // }
+    for (size_t i = 0; i < size; i++) arr[i] = 1.0f;
 
     return arr;
 }

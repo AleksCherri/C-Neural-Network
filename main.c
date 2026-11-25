@@ -9,9 +9,9 @@
 #define EXTENDING    4
 
 #define PRINTING 1 // Prints input and output vectors
-#define LOADING  1 // Loads Model from file
+#define LOADING  0 // Loads Model from file
 
-#define AFUNC ReLU
+#define AFUNC GeLU
 
 #if PRINTING
     #define PRT printf("\n\nInputs:\n");\
@@ -52,8 +52,7 @@ int main(void) {
     struct timespec t0, t1;
 
     ptype inputs[D_MODEL] = {1,2,3,4,5,6,7,8};
-    ptype labels[D_MODEL] = {1,2,3,4,5,6,7,8};
-    ptype *outputs;
+    ptype labels[D_MODEL] = {8,7,6,5,4,3,2,1};
 
     clock_gettime(CLOCK_MONOTONIC, &t0);
     Model *model;
@@ -93,17 +92,18 @@ int main(void) {
         for (size_t i = 0; i < D_MODEL; i++) printf("%.3f, ", labels[i]);
     }
 
-    outputs = MLP(model, inputs);
+    ptype *outputs = MLP(model, inputs);
     printf("\n\nMSE: %.3f\n", MSE(outputs, labels));
 
     prtout(model);
 
-    for (size_t i = 0; i < 10; i++) {
-        backProp(model, inputs, labels, 0.001);
-        outputs = MLP(model, inputs);
-        printf("MSE: %.3f\n", MSE(outputs, labels));
-        prtout(model);
+    for (size_t i = 0; i < 10000; i++) {
+        backProp(model, inputs, labels, 0.0001);
+        //printf("MSE: %.3f\n", MSE(outputs, labels));
+        //prtout(model);
     }
+    printf("MSE: %.3f\n", MSE(outputs, labels));
+    prtout(model);
 
     clock_gettime(CLOCK_MONOTONIC, &t0);
     freeModel(model);

@@ -6,10 +6,10 @@
 
 #define RANDOM_SCALE 2.0f
 #define D_MODEL      8
-#define EXTENDING    4
+#define EXTENDING    2
 
 #define PRINTING 1 // Prints input and output vectors
-#define LOADING  0 // Loads Model from file
+#define LOADING  1 // Loads Model from file
 
 #define AFUNC GeLU
 
@@ -46,6 +46,19 @@ void prtout(const Model *model) {
         printf("%.3f, ", model->buffer[i]);
     }
     puts("\n");
+}
+
+void prtmdl(const Model *model) {
+    ptype *bias = model->params + model->w_c;
+
+    for (size_t i = 0; i < model->l_c; i++) {
+        size_t layer = model->layers[i];
+        printf("\nLayer %zu\n\033[34mBiases\033[0m: ", i);
+        for (size_t j = 0; j < layer; j++) {
+            printf("%.3f ", bias[j]);
+        }
+        bias += layer;
+    }
 }
 
 int main(void) {
@@ -86,9 +99,14 @@ int main(void) {
 
     printf("\n\nForward pass: %.3f ms", ms_between(&t0, &t1));
 
-    PRT
+    //PRT
     if (PRINTING) {
-        printf("\n\nTarget:\n");
+        puts("\n\nInputs:");
+        for (size_t i = 0; i < D_MODEL; i++) printf("%.3f, ", inputs[i]);
+    }
+
+    if (PRINTING) {
+        puts("\n\nTarget:");
         for (size_t i = 0; i < D_MODEL; i++) printf("%.3f, ", labels[i]);
     }
 
@@ -97,13 +115,17 @@ int main(void) {
 
     prtout(model);
 
-    for (size_t i = 0; i < 10000; i++) {
+    for (size_t i = 0; i < 50000; i++) {
         backProp(model, inputs, labels, 0.0001);
         //printf("MSE: %.3f\n", MSE(outputs, labels));
         //prtout(model);
     }
     printf("MSE: %.3f\n", MSE(outputs, labels));
     prtout(model);
+
+    //PRT
+    puts("");
+    prtmdl(model);
 
     clock_gettime(CLOCK_MONOTONIC, &t0);
     freeModel(model);

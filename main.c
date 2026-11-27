@@ -6,10 +6,11 @@
 
 #define RANDOM_SCALE 2.0f
 #define D_MODEL      8
-#define EXTENDING    2
+#define EXTENDING    4
+#define LEARNING     50000
 
 #define PRINTING 1 // Prints input and output vectors
-#define LOADING  1 // Loads Model from file
+#define LOADING  0 // Loads Model from file
 
 #define AFUNC GeLU
 
@@ -43,20 +44,33 @@ static ptype MSE(const ptype *outputs, const ptype *labels) {
 void prtout(const Model *model) {
     printf("Outputs:\n");
     for (size_t i = model->b_c-model->layers[model->l_c - 1]; i < model->b_c; i++) {
-        printf("%.3f, ", model->buffer[i]);
+        printf("%.3f ", model->buffer[i]);
     }
     puts("\n");
 }
 
 void prtmdl(const Model *model) {
-    ptype *bias = model->params + model->w_c;
+    const ptype *bias = model->params + model->w_c;
+    const ptype *weights = model->params;
 
+    size_t layer = 0;
     for (size_t i = 0; i < model->l_c; i++) {
-        size_t layer = model->layers[i];
-        printf("\nLayer %zu\n\033[34mBiases\033[0m: ", i);
+        size_t prev_layer = layer;
+        layer = model->layers[i];
+
+        printf("\n\033[4mLAYER %zu\033[0m\n\033[35mWeights\033[0m:\n", i);
+
+        if (prev_layer) for (size_t j = 0; j < layer; j++) {
+            for (size_t k = 0; k < prev_layer; k++) printf("%f ", weights[k]);
+            printf("\033[32m%zu\033[0m\n", j);
+            weights += prev_layer;
+        }
+
+        printf("\033[36mBiases\033[0m:\n");
         for (size_t j = 0; j < layer; j++) {
             printf("%.3f ", bias[j]);
         }
+        puts("");
         bias += layer;
     }
 }
@@ -65,7 +79,7 @@ int main(void) {
     struct timespec t0, t1;
 
     ptype inputs[D_MODEL] = {1,2,3,4,5,6,7,8};
-    ptype labels[D_MODEL] = {8,7,6,5,4,3,2,1};
+    ptype labels[D_MODEL] = {3,6,3,8,9,1,0,2};
 
     clock_gettime(CLOCK_MONOTONIC, &t0);
     Model *model;
@@ -102,12 +116,12 @@ int main(void) {
     //PRT
     if (PRINTING) {
         puts("\n\nInputs:");
-        for (size_t i = 0; i < D_MODEL; i++) printf("%.3f, ", inputs[i]);
+        for (size_t i = 0; i < D_MODEL; i++) printf("%.3f ", inputs[i]);
     }
 
     if (PRINTING) {
         puts("\n\nTarget:");
-        for (size_t i = 0; i < D_MODEL; i++) printf("%.3f, ", labels[i]);
+        for (size_t i = 0; i < D_MODEL; i++) printf("%.3f ", labels[i]);
     }
 
     ptype *outputs = MLP(model, inputs);
@@ -115,7 +129,7 @@ int main(void) {
 
     prtout(model);
 
-    for (size_t i = 0; i < 50000; i++) {
+    for (size_t i = 0; i < LEARNING; i++) {
         backProp(model, inputs, labels, 0.0001);
         //printf("MSE: %.3f\n", MSE(outputs, labels));
         //prtout(model);
@@ -124,7 +138,6 @@ int main(void) {
     prtout(model);
 
     //PRT
-    puts("");
     prtmdl(model);
 
     clock_gettime(CLOCK_MONOTONIC, &t0);
